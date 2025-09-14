@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase"
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore"
+import { ActivityService } from "./activityService"
 
 export interface CategoryData {
   id: string
@@ -494,67 +495,15 @@ export class DataSetupService {
     ]
   }
 
-  // 사용자별 기본 데이터 설정
+  // 사용자별 기본 데이터 설정 - ActivityService 사용
   static async setupUserData(userId: string): Promise<void> {
     try {
-      // 카테고리가 이미 있는지 확인
-      const categoriesRef = collection(db, "activityCategories")
-      const categoriesQuery = query(
-        categoriesRef,
-        where("userId", "==", userId)
-      )
-      const categoriesSnapshot = await getDocs(categoriesQuery)
+      console.log("Setting up user data...")
 
-      if (categoriesSnapshot.empty) {
-        // 기본 카테고리 생성
-        const defaultCategories = this.getDefaultCategories()
-        const categoryMap: { [key: string]: string } = {}
+      // ActivityService의 getCategories가 자동으로 초기화를 처리함
+      await ActivityService.getCategories(userId)
 
-        for (const categoryData of defaultCategories) {
-          const categoryRef = await addDoc(categoriesRef, {
-            ...categoryData,
-            userId,
-            created_at: new Date(),
-            updated_at: new Date(),
-          })
-          categoryMap[categoryData.name] = categoryRef.id
-        }
-
-        // 기본 활동 아이템 생성
-        const activityItemsRef = collection(db, "activityItems")
-        const defaultActivityItems = this.getDefaultActivityItems()
-
-        for (const itemData of defaultActivityItems) {
-          // 카테고리 이름을 ID로 매핑
-          const categoryNameMap: { [key: string]: string } = {
-            hygiene: "씻기",
-            meals: "식사하기",
-            study: "공부하기",
-            reading: "독서",
-            exercise: "운동",
-            self_development: "자기계발",
-            rest: "휴식",
-            others: "기타",
-          }
-
-          const categoryName = categoryNameMap[itemData.categoryId]
-          const categoryId = categoryMap[categoryName]
-
-          if (categoryId) {
-            await addDoc(activityItemsRef, {
-              ...itemData,
-              categoryId,
-              userId,
-              created_at: new Date(),
-              updated_at: new Date(),
-            })
-          }
-        }
-
-        console.log("기본 데이터가 성공적으로 생성되었습니다.")
-      } else {
-        console.log("사용자 데이터가 이미 존재합니다.")
-      }
+      console.log("기본 데이터가 성공적으로 생성되었습니다.")
     } catch (error) {
       console.error("사용자 데이터 설정 중 오류:", error)
       throw error

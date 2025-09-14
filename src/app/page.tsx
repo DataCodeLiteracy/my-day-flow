@@ -16,6 +16,7 @@ import {
   Square,
   Trash2,
   History,
+  ChevronRight,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -63,6 +64,7 @@ export default function Home() {
   })
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false)
+  const [showIconSuggestions, setShowIconSuggestions] = useState(false)
   const [newCategoryForm, setNewCategoryForm] = useState({
     name: "",
     description: "",
@@ -88,7 +90,7 @@ export default function Home() {
         setError(null)
         setIsDataLoading(true)
 
-        // 기본 카테고리는 코드에서 제공, 초기화 불필요
+        // getCategories에서 자동으로 초기화됨
 
         const [categoriesData, sessionsData] = await Promise.all([
           ActivityService.getCategories(userUid),
@@ -502,81 +504,89 @@ export default function Home() {
                 </p>
               </div>
             ) : (
-              categories.map((category) => {
-                console.log("Category for navigation:", {
-                  id: category.id,
-                  name: category.name,
-                  isHardcoded: category.id.startsWith("default_"),
-                })
-                return (
-                  <div
-                    key={category.id}
-                    className='flex items-center justify-between bg-theme-primary/10 border border-theme-primary/20 rounded-lg p-4 hover:bg-theme-primary/20 hover:border-theme-primary/40 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md'
-                    onClick={() => {
-                      console.log("Navigating to:", `/activity/${category.id}`)
-                      router.push(`/activity/${category.id}`)
-                    }}
-                  >
-                    <div className='flex items-center gap-3 flex-1'>
-                      <span className='text-2xl'>{category.icon}</span>
-                      <div>
-                        <h3 className='text-lg font-semibold text-theme-primary'>
-                          {category.name}
-                        </h3>
-                        <p className='text-sm text-theme-secondary'>
-                          {category.description}
-                        </p>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
+                {categories.map((category) => {
+                  console.log("Category for navigation:", {
+                    id: category.id,
+                    name: category.name,
+                    isHardcoded: category.id.startsWith("default_"),
+                  })
+                  return (
+                    <div
+                      key={category.id}
+                      className='flex flex-col bg-theme-primary/10 border border-theme-primary/20 rounded-lg p-4 hover:bg-theme-primary/20 hover:border-theme-primary/40 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md'
+                      onClick={() => {
+                        console.log(
+                          "Navigating to:",
+                          `/activity/${category.id}`
+                        )
+                        router.push(`/activity/${category.id}`)
+                      }}
+                    >
+                      <div className='flex items-center gap-3 flex-1 mb-3'>
+                        <span className='text-2xl'>{category.icon}</span>
+                        <div className='min-w-0 flex-1'>
+                          <h3 className='text-lg font-semibold text-theme-primary truncate'>
+                            {category.name}
+                          </h3>
+                          <p className='text-sm text-theme-secondary line-clamp-2'>
+                            {category.description}
+                          </p>
+                        </div>
+                      </div>
+                      <div className='flex items-center justify-between'>
+                        <div className='flex items-center gap-2'>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditCategory(category)
+                            }}
+                            className='text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded-lg transition-colors'
+                            title='수정'
+                          >
+                            <svg
+                              className='w-4 h-4'
+                              fill='none'
+                              stroke='currentColor'
+                              viewBox='0 0 24 24'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth={2}
+                                d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteCategoryStart(category)
+                            }}
+                            className='text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded-lg transition-colors'
+                            title='삭제'
+                          >
+                            <svg
+                              className='w-4 h-4'
+                              fill='none'
+                              stroke='currentColor'
+                              viewBox='0 0 24 24'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth={2}
+                                d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                        <ChevronRight className='h-5 w-5 text-theme-tertiary' />
                       </div>
                     </div>
-                    <div className='flex items-center gap-3'>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleEditCategory(category)
-                        }}
-                        className='text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded-lg transition-colors'
-                        title='수정'
-                      >
-                        <svg
-                          className='w-4 h-4'
-                          fill='none'
-                          stroke='currentColor'
-                          viewBox='0 0 24 24'
-                        >
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth={2}
-                            d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteCategoryStart(category)
-                        }}
-                        className='text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded-lg transition-colors'
-                        title='삭제'
-                      >
-                        <svg
-                          className='w-4 h-4'
-                          fill='none'
-                          stroke='currentColor'
-                          viewBox='0 0 24 24'
-                        >
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth={2}
-                            d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )
-              })
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -769,7 +779,56 @@ export default function Home() {
                     }
                     className='w-full px-3 py-2 border border-theme-primary/20 rounded-lg bg-theme-background text-theme-primary focus:outline-none focus:border-theme-primary'
                     placeholder='예: 🚿'
+                    onFocus={() => setShowIconSuggestions(true)}
                   />
+
+                  {/* 아이콘 추천 */}
+                  {showIconSuggestions && (
+                    <div className='mt-2 p-3 bg-theme-primary/5 rounded-lg border border-theme-primary/20'>
+                      <p className='text-xs text-theme-secondary mb-2'>
+                        추천 아이콘:
+                      </p>
+                      <div className='grid grid-cols-5 gap-2'>
+                        {[
+                          "🚿",
+                          "🍽️",
+                          "📚",
+                          "💪",
+                          "😴",
+                          "🎵",
+                          "🎨",
+                          "💻",
+                          "🏃",
+                          "🧘",
+                          "📝",
+                          "🔧",
+                          "🎯",
+                          "💡",
+                          "🌟",
+                        ].map((icon) => (
+                          <button
+                            key={icon}
+                            onClick={() => {
+                              setEditForm({
+                                ...editForm,
+                                icon: icon,
+                              })
+                              setShowIconSuggestions(false)
+                            }}
+                            className='w-8 h-8 text-lg hover:bg-theme-primary/20 rounded-lg transition-colors flex items-center justify-center'
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setShowIconSuggestions(false)}
+                        className='mt-2 text-xs text-theme-tertiary hover:text-theme-primary transition-colors'
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className='flex gap-2 pt-4'>
                   <button
@@ -859,7 +918,56 @@ export default function Home() {
                     }
                     className='w-full px-3 py-2 border border-theme-primary/20 rounded-lg bg-theme-background text-theme-primary focus:outline-none focus:border-theme-primary'
                     placeholder='비워두면 📝로 설정됩니다'
+                    onFocus={() => setShowIconSuggestions(true)}
                   />
+
+                  {/* 아이콘 추천 */}
+                  {showIconSuggestions && (
+                    <div className='mt-2 p-3 bg-theme-primary/5 rounded-lg border border-theme-primary/20'>
+                      <p className='text-xs text-theme-secondary mb-2'>
+                        추천 아이콘:
+                      </p>
+                      <div className='grid grid-cols-5 gap-2'>
+                        {[
+                          "🚿",
+                          "🍽️",
+                          "📚",
+                          "💪",
+                          "😴",
+                          "🎵",
+                          "🎨",
+                          "💻",
+                          "🏃",
+                          "🧘",
+                          "📝",
+                          "🔧",
+                          "🎯",
+                          "💡",
+                          "🌟",
+                        ].map((icon) => (
+                          <button
+                            key={icon}
+                            onClick={() => {
+                              setNewCategoryForm({
+                                ...newCategoryForm,
+                                icon: icon,
+                              })
+                              setShowIconSuggestions(false)
+                            }}
+                            className='w-8 h-8 text-lg hover:bg-theme-primary/20 rounded-lg transition-colors flex items-center justify-center'
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setShowIconSuggestions(false)}
+                        className='mt-2 text-xs text-theme-tertiary hover:text-theme-primary transition-colors'
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className='flex gap-2 pt-4'>
                   <button

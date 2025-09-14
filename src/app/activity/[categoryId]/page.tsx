@@ -77,6 +77,9 @@ export default function ActivityCategoryPage() {
     const loadData = async () => {
       try {
         setError(null)
+
+        // getCategories에서 자동으로 초기화됨
+
         const [itemsData, sessionsData] = await Promise.all([
           ActivityService.getActivityItems(categoryId, userDocId!),
           ActivityService.getTodaySessions(userUid!),
@@ -261,7 +264,12 @@ export default function ActivityCategoryPage() {
 
   // 아이템 수정 저장
   const handleEditSave = async () => {
+    console.log("🔍 handleEditSave called")
+    console.log("📝 Editing item:", editingItem)
+    console.log("📝 Form data:", editForm)
+
     if (!editingItem || !editForm.name.trim()) {
+      console.log("❌ Validation failed")
       setError("아이템 이름을 입력해주세요.")
       return
     }
@@ -270,12 +278,14 @@ export default function ActivityCategoryPage() {
       setIsLoading(true)
       setError(null)
 
+      console.log("📤 Updating item with ID:", editingItem.id)
       await ActivityService.updateActivityItem(editingItem.id, {
         name: editForm.name,
         description: editForm.description,
         estimatedDuration: editForm.estimatedDuration,
       })
 
+      console.log("✅ Item updated successfully")
       setIsEditModalOpen(false)
       setEditingItem(null)
       setEditForm({ name: "", description: "", estimatedDuration: 0 })
@@ -286,10 +296,11 @@ export default function ActivityCategoryPage() {
           categoryId,
           userDocId!
         )
+        console.log("🔄 Refreshed items after update:", itemsData.length)
         setActivityItems(itemsData)
       }
     } catch (error) {
-      console.error("Error updating item:", error)
+      console.error("❌ Error updating item:", error)
       setError("아이템 수정 중 오류가 발생했습니다.")
     } finally {
       setIsLoading(false)
@@ -351,7 +362,14 @@ export default function ActivityCategoryPage() {
 
   // 새 아이템 추가 저장
   const handleAddItemSave = async () => {
+    console.log("🔍 handleAddItemSave called")
+    console.log("📝 Form data:", newItemForm)
+    console.log("📂 Category ID:", categoryId)
+    console.log("👤 User Doc ID:", userDocId)
+    console.log("📊 Current items count:", activityItems.length)
+
     if (!newItemForm.name.trim()) {
+      console.log("❌ Validation failed: name is empty")
       setError("아이템 이름을 입력해주세요.")
       return
     }
@@ -360,15 +378,21 @@ export default function ActivityCategoryPage() {
       setIsLoading(true)
       setError(null)
 
-      await ActivityService.createActivityItem({
+      const itemData = {
         categoryId,
         name: newItemForm.name,
         description: newItemForm.description,
         estimatedDuration: newItemForm.estimatedDuration,
         order: activityItems.length,
         isActive: true,
-      })
+        userId: userDocId!, // userId 추가
+      }
 
+      console.log("📤 Creating item with data:", itemData)
+
+      await ActivityService.createActivityItem(itemData)
+
+      console.log("✅ Item created successfully, refreshing data...")
       setIsAddModalOpen(false)
       setNewItemForm({ name: "", description: "", estimatedDuration: 0 })
 
@@ -378,10 +402,11 @@ export default function ActivityCategoryPage() {
           categoryId,
           userDocId!
         )
+        console.log("🔄 Refreshed items:", itemsData.length)
         setActivityItems(itemsData)
       }
     } catch (error) {
-      console.error("Error creating item:", error)
+      console.error("❌ Error creating item:", error)
       setError("아이템 생성 중 오류가 발생했습니다.")
     } finally {
       setIsLoading(false)
@@ -483,63 +508,65 @@ export default function ActivityCategoryPage() {
                 </p>
               </div>
             ) : (
-              activityItems.map((item) => {
-                const itemSessions = getItemSessions(item.id)
-                const totalTime = itemSessions.reduce(
-                  (sum, session) => sum + session.activeDuration,
-                  0
-                )
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
+                {activityItems.map((item) => {
+                  const itemSessions = getItemSessions(item.id)
+                  const totalTime = itemSessions.reduce(
+                    (sum, session) => sum + session.activeDuration,
+                    0
+                  )
 
-                return (
-                  <div
-                    key={item.id}
-                    className='bg-theme-primary/10 border border-theme-primary/20 rounded-lg p-4 hover:bg-theme-primary/20 hover:border-theme-primary/40 transition-all duration-200'
-                  >
-                    {/* 아이템 정보 */}
-                    <div className='mb-4'>
-                      <div className='flex items-start justify-between mb-2'>
-                        <h3 className='text-lg font-semibold text-theme-primary flex-1'>
-                          {item.name}
-                        </h3>
-                        <div className='flex items-center gap-1 ml-2'>
-                          <button
-                            onClick={() => handleEditStart(item)}
-                            className='text-blue-500 hover:text-blue-700 p-2 rounded-lg transition-colors'
-                            title='수정'
-                          >
-                            <Edit className='h-4 w-4' />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItemStart(item)}
-                            className='text-red-500 hover:text-red-700 p-2 rounded-lg transition-colors'
-                            title='삭제'
-                          >
-                            <Trash2 className='h-4 w-4' />
-                          </button>
+                  return (
+                    <div
+                      key={item.id}
+                      className='bg-theme-primary/10 border border-theme-primary/20 rounded-lg p-4 hover:bg-theme-primary/20 hover:border-theme-primary/40 transition-all duration-200'
+                    >
+                      {/* 아이템 정보 */}
+                      <div className='mb-4'>
+                        <div className='flex items-start justify-between mb-2'>
+                          <h3 className='text-lg font-semibold text-theme-primary flex-1'>
+                            {item.name}
+                          </h3>
+                          <div className='flex items-center gap-1 ml-2'>
+                            <button
+                              onClick={() => handleEditStart(item)}
+                              className='text-blue-500 hover:text-blue-700 p-2 rounded-lg transition-colors'
+                              title='수정'
+                            >
+                              <Edit className='h-4 w-4' />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItemStart(item)}
+                              className='text-red-500 hover:text-red-700 p-2 rounded-lg transition-colors'
+                              title='삭제'
+                            >
+                              <Trash2 className='h-4 w-4' />
+                            </button>
+                          </div>
+                        </div>
+                        <p className='text-sm text-theme-secondary mb-2'>
+                          {item.description}
+                        </p>
+                        <div className='flex items-center gap-4 text-xs text-theme-tertiary'>
+                          <span>예상: {item.estimatedDuration}분</span>
+                          <span>오늘: {Math.floor(totalTime / 60)}분</span>
                         </div>
                       </div>
-                      <p className='text-sm text-theme-secondary mb-2'>
-                        {item.description}
-                      </p>
-                      <div className='flex items-center gap-4 text-xs text-theme-tertiary'>
-                        <span>예상: {item.estimatedDuration}분</span>
-                        <span>오늘: {Math.floor(totalTime / 60)}분</span>
-                      </div>
-                    </div>
 
-                    {/* 타이머 시작 버튼 */}
-                    <button
-                      onClick={() => handleStartActivity(item.id, item.name)}
-                      disabled={timerState.isRunning}
-                      className='w-full flex items-center justify-center gap-3 bg-accent-theme hover:bg-accent-theme-secondary disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] disabled:transform-none disabled:scale-100 font-medium text-base'
-                      title='활동 시작'
-                    >
-                      <Play className='h-5 w-5' />
-                      <span>타이머 시작</span>
-                    </button>
-                  </div>
-                )
-              })
+                      {/* 타이머 시작 버튼 */}
+                      <button
+                        onClick={() => handleStartActivity(item.id, item.name)}
+                        disabled={timerState.isRunning}
+                        className='w-full flex items-center justify-center gap-3 bg-accent-theme hover:bg-accent-theme-secondary disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] disabled:transform-none disabled:scale-100 font-medium text-base'
+                        title='활동 시작'
+                      >
+                        <Play className='h-5 w-5' />
+                        <span>타이머 시작</span>
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>

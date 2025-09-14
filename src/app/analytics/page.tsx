@@ -246,13 +246,13 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className='max-w-md mx-auto px-4 py-6'>
+      <div className='max-w-7xl mx-auto px-4 py-6'>
         {/* 분석 유형 선택 */}
         <div className='bg-theme-secondary rounded-2xl p-6 mb-6 shadow-lg'>
           <h2 className='text-lg font-semibold text-theme-primary mb-4'>
             분석 유형
           </h2>
-          <div className='space-y-3'>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
             <button
               onClick={() => router.push("/analytics/daily")}
               className='w-full bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-blue-200 dark:border-blue-800'
@@ -324,9 +324,9 @@ export default function AnalyticsPage() {
             </p>
           </div>
         ) : analyticsData ? (
-          <>
+          <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* 전체 통계 카드 */}
-            <div className='bg-theme-secondary rounded-2xl p-6 mb-6 shadow-lg'>
+            <div className='bg-theme-secondary rounded-2xl p-6 shadow-lg'>
               <h2 className='text-lg font-semibold text-theme-primary mb-4 flex items-center gap-2'>
                 <BarChart3 className='h-5 w-5' />
                 전체 요약
@@ -363,7 +363,7 @@ export default function AnalyticsPage() {
 
             {/* 카테고리별 요약 */}
             {Object.keys(analyticsData.categoryStats).length > 0 && (
-              <div className='bg-theme-secondary rounded-2xl p-6 mb-6 shadow-lg'>
+              <div className='bg-theme-secondary rounded-2xl p-6 shadow-lg'>
                 <h2 className='text-lg font-semibold text-theme-primary mb-4 flex items-center gap-2'>
                   <PieChart className='h-5 w-5' />
                   카테고리별 요약
@@ -409,7 +409,7 @@ export default function AnalyticsPage() {
 
             {/* 최근 활동 요약 */}
             {Object.keys(analyticsData.dailyStats).length > 0 && (
-              <div className='bg-theme-secondary rounded-2xl p-6 mb-6 shadow-lg'>
+              <div className='bg-theme-secondary rounded-2xl p-6 shadow-lg lg:col-span-2'>
                 <h2 className='text-lg font-semibold text-theme-primary mb-4 flex items-center gap-2'>
                   <Calendar className='h-5 w-5' />
                   최근 활동
@@ -440,9 +440,9 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <div className='bg-theme-secondary rounded-2xl p-6 mb-6 shadow-lg text-center'>
+          <div className='bg-theme-secondary rounded-2xl p-6 shadow-lg text-center'>
             <div className='text-4xl mb-4'>📊</div>
             <p className='text-theme-secondary mb-2'>분석 데이터가 없습니다</p>
             <p className='text-sm text-theme-tertiary'>

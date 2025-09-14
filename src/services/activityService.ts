@@ -22,8 +22,8 @@ import {
 import { ApiError } from "@/lib/apiClient"
 
 export class ActivityService {
-  // 초기화 중인 유저들 추적
-  private static initializingUsers = new Set<string>()
+  // 초기화 Promise 캐싱
+  private static initializationPromises = new Map<string, Promise<void>>()
 
   // 사용자 문서 ID 조회
   static async getUserDocId(userUid: string): Promise<string> {
@@ -46,6 +46,8 @@ export class ActivityService {
   // 카테고리 관련
   static async getCategories(userId: string): Promise<ActivityCategory[]> {
     try {
+      console.log("🔍 getCategories called with userId:", userId)
+
       // 사용자 카테고리 가져오기
       const categoriesRef = collection(db, "userCategories")
       const q = query(
@@ -55,104 +57,61 @@ export class ActivityService {
       )
       const snapshot = await getDocs(q)
 
+      console.log("📊 Categories found:", snapshot.size)
+
       const userCategories = snapshot.docs.map((doc) => {
         const data = doc.data()
-        console.log("Category document:", {
-          docId: doc.id,
-          dataId: data.id,
+        console.log("📂 Category:", {
+          id: doc.id,
           name: data.name,
-          isHardcoded: doc.id.startsWith("default_"),
+          userId: data.userId,
         })
-        const { id, ...dataWithoutId } = doc.data()
         return {
-          id: doc.id, // 실제 Firestore ID 사용 (하드코딩된 ID 덮어쓰기)
-          ...dataWithoutId,
-          created_at: doc.data().created_at?.toDate() || new Date(),
-          updated_at: doc.data().updated_at?.toDate() || new Date(),
+          id: doc.id,
+          ...data,
+          created_at: data.created_at?.toDate() || new Date(),
+          updated_at: data.updated_at?.toDate() || new Date(),
         }
       }) as ActivityCategory[]
 
-      // 중복 제거 (같은 name을 가진 카테고리 중 하나만 유지)
-      const uniqueCategories = userCategories.reduce((acc, category) => {
-        const existing = acc.find((c) => c.name === category.name)
-        if (!existing) {
-          acc.push(category)
-        }
-        return acc
-      }, [] as ActivityCategory[])
-
-      console.log(
-        "User categories found:",
-        userCategories.length,
-        "Unique:",
-        uniqueCategories.length,
-        uniqueCategories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          isHardcoded: c.id.startsWith("default_"),
-        }))
-      )
-
-      // 각 카테고리의 ID와 name 출력
-      uniqueCategories.forEach((cat) => {
-        console.log("📂 Category:", {
-          id: cat.id,
-          name: cat.name,
-          userId: cat.userId,
-        })
-      })
-
       // 카테고리가 없으면 기본 데이터로 초기화 (한 번만)
       if (userCategories.length === 0) {
-        // 이미 초기화 중인 유저는 대기
-        if (this.initializingUsers.has(userId)) {
-          console.log("User is already being initialized, waiting...")
-          // 초기화 완료까지 대기 (최대 5초)
-          let attempts = 0
-          while (this.initializingUsers.has(userId) && attempts < 50) {
-            await new Promise((resolve) => setTimeout(resolve, 100))
-            attempts++
-          }
-          // 대기 후 다시 데이터 가져오기
-          const retrySnapshot = await getDocs(q)
-          const retryCategories = retrySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            created_at: doc.data().created_at?.toDate() || new Date(),
-            updated_at: doc.data().updated_at?.toDate() || new Date(),
-          })) as ActivityCategory[]
-          return retryCategories
-        }
-
         console.log("No categories found, initializing...")
-        this.initializingUsers.add(userId)
 
-        try {
-          await this.initializeUserCategories(userId)
-          // 초기화 후 다시 데이터베이스에서 가져오기
-          const newSnapshot = await getDocs(q)
-          const newCategories = newSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            created_at: doc.data().created_at?.toDate() || new Date(),
-            updated_at: doc.data().updated_at?.toDate() || new Date(),
-          })) as ActivityCategory[]
-          console.log(
-            "After initialization:",
-            newCategories.length,
-            newCategories.map((c) => c.id)
-          )
-          return newCategories
-        } finally {
-          this.initializingUsers.delete(userId)
+        // 이미 초기화 중인 경우 기존 Promise를 기다림
+        if (this.initializationPromises.has(userId)) {
+          console.log("⏳ Waiting for existing initialization...")
+          await this.initializationPromises.get(userId)
+        } else {
+          // 새로운 초기화 시작
+          const initPromise = this.initializeUserCategories(userId)
+          this.initializationPromises.set(userId, initPromise)
+          await initPromise
+          this.initializationPromises.delete(userId)
         }
+
+        // 초기화 후 다시 데이터 가져오기
+        const newSnapshot = await getDocs(q)
+        const newCategories = newSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate() || new Date(),
+          updated_at: doc.data().updated_at?.toDate() || new Date(),
+        })) as ActivityCategory[]
+
+        console.log(
+          "✅ After initialization:",
+          newCategories.length,
+          "categories"
+        )
+        return newCategories
       }
 
-      return uniqueCategories
+      console.log("✅ Returning", userCategories.length, "categories")
+      return userCategories
     } catch (error) {
-      console.error("Error getting categories:", error)
-      // 오류 시 기본 카테고리 반환
-      return this.getDefaultCategories()
+      console.error("❌ Error getting categories:", error)
+      throw new ApiError("카테고리를 가져오는 중 오류가 발생했습니다.")
     }
   }
 
@@ -161,7 +120,22 @@ export class ActivityService {
     try {
       console.log("🚀 Starting user categories initialization for:", userId)
 
+      // 이미 초기화되었는지 다시 한번 확인
       const categoriesRef = collection(db, "userCategories")
+      const checkQuery = query(
+        categoriesRef,
+        where("userId", "==", userId),
+        where("isActive", "==", true)
+      )
+      const checkSnapshot = await getDocs(checkQuery)
+
+      if (checkSnapshot.size > 0) {
+        console.log("✅ User already has categories, skipping initialization")
+        return
+      }
+
+      console.log("📋 Creating categories for user:", userId)
+
       const itemsRef = collection(db, "userActivityItems")
       const defaultCategories = this.getDefaultCategories()
       const defaultItems = this.getDefaultItems()
@@ -170,10 +144,9 @@ export class ActivityService {
       console.log("📋 Default items:", defaultItems.length)
 
       // 기본 카테고리들을 해당 유저의 데이터로 복사
-      const categoryIdMap = new Map<string, string>()
+      const categoryNameToIdMap = new Map<string, string>()
       for (const category of defaultCategories) {
         console.log("📂 Creating category:", {
-          originalId: category.id,
           name: category.name,
         })
         const docRef = await addDoc(categoriesRef, {
@@ -183,19 +156,27 @@ export class ActivityService {
           updated_at: serverTimestamp(),
         })
         console.log("✅ Category created with new ID:", docRef.id)
-        console.log("🔗 ID mapping:", { original: category.id, new: docRef.id })
-        categoryIdMap.set(category.id, docRef.id)
+        console.log("🔗 ID mapping:", { name: category.name, new: docRef.id })
+        categoryNameToIdMap.set(category.name, docRef.id)
       }
 
-      console.log("🗺️ Category ID mapping:", Object.fromEntries(categoryIdMap))
+      console.log(
+        "🗺️ Category Name to ID mapping:",
+        Object.fromEntries(categoryNameToIdMap)
+      )
 
       // 기본 아이템들을 해당 유저의 데이터로 복사
       let itemsCreated = 0
       for (const item of defaultItems) {
-        const newCategoryId = categoryIdMap.get(item.categoryId)
+        if (!item.categoryName) {
+          console.error("❌ Item missing categoryName:", item.name)
+          continue
+        }
+
+        const newCategoryId = categoryNameToIdMap.get(item.categoryName)
         console.log("📄 Processing item:", {
           name: item.name,
-          originalCategoryId: item.categoryId,
+          categoryName: item.categoryName,
           newCategoryId,
         })
 
@@ -207,19 +188,21 @@ export class ActivityService {
             created_at: serverTimestamp(),
             updated_at: serverTimestamp(),
           }
+          // categoryName 제거 (Firestore에 저장할 때는 필요 없음)
+          delete itemData.categoryName
           console.log("📝 Item data to be saved:", itemData)
 
           const docRef = await addDoc(itemsRef, itemData)
           itemsCreated++
           console.log("✅ Item created:", item.name, "with ID:", docRef.id)
         } else {
-          console.error("❌ No mapping found for category:", item.categoryId)
+          console.error("❌ No mapping found for category:", item.categoryName)
         }
       }
 
       console.log("🎉 User categories and items initialized successfully")
       console.log("📊 Summary:", {
-        categoriesCreated: categoryIdMap.size,
+        categoriesCreated: categoryNameToIdMap.size,
         itemsCreated,
       })
     } catch (error) {
@@ -229,416 +212,314 @@ export class ActivityService {
   }
 
   // 기본 아이템 반환 (하드코딩된 데이터)
-  private static getDefaultItems(): ActivityItem[] {
+  private static getDefaultItems(): Omit<
+    ActivityItem,
+    "id" | "created_at" | "updated_at" | "categoryId"
+  >[] {
     return [
       // 씻기 카테고리
       {
-        id: "default_item_1",
-        categoryId: "default_hygiene",
+        categoryName: "씻기",
         name: "양치하기",
         description: "치아 청결 관리",
         estimatedDuration: 5,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_2",
-        categoryId: "default_hygiene",
+        categoryName: "씻기",
         name: "세수하기",
         description: "얼굴 세정",
         estimatedDuration: 3,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_3",
-        categoryId: "default_hygiene",
+        categoryName: "씻기",
         name: "목욕하기",
         description: "전신 세정",
         estimatedDuration: 20,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_4",
-        categoryId: "default_hygiene",
+        categoryName: "씻기",
         name: "샤워하기",
         description: "빠른 전신 세정",
         estimatedDuration: 10,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 공부하기 카테고리
       {
-        id: "default_item_5",
-        categoryId: "default_study",
+        categoryName: "공부하기",
         name: "수학 공부",
         description: "수학 문제 풀이 및 학습",
         estimatedDuration: 60,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_6",
-        categoryId: "default_study",
+        categoryName: "공부하기",
         name: "영어 공부",
         description: "영어 학습 및 연습",
         estimatedDuration: 45,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_7",
-        categoryId: "default_study",
+        categoryName: "공부하기",
         name: "코딩 공부",
         description: "프로그래밍 학습",
         estimatedDuration: 90,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_8",
-        categoryId: "default_study",
+        categoryName: "공부하기",
         name: "시험 준비",
         description: "시험 대비 학습",
         estimatedDuration: 120,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 식사하기 카테고리
       {
-        id: "default_item_9",
-        categoryId: "default_meals",
+        categoryName: "식사하기",
         name: "아침 식사",
         description: "아침 식사 준비 및 섭취",
         estimatedDuration: 20,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_10",
-        categoryId: "default_meals",
+        categoryName: "식사하기",
         name: "점심 식사",
         description: "점심 식사 준비 및 섭취",
         estimatedDuration: 30,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_11",
-        categoryId: "default_meals",
+        categoryName: "식사하기",
         name: "저녁 식사",
         description: "저녁 식사 준비 및 섭취",
         estimatedDuration: 40,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_12",
-        categoryId: "default_meals",
+        categoryName: "식사하기",
         name: "간식",
         description: "간식 섭취",
         estimatedDuration: 10,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 독서 카테고리
       {
-        id: "default_item_13",
-        categoryId: "default_reading",
+        categoryName: "독서",
         name: "소설 읽기",
         description: "소설 및 문학 작품 읽기",
         estimatedDuration: 60,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_14",
-        categoryId: "default_reading",
+        categoryName: "독서",
         name: "전문서 읽기",
         description: "전문서 및 기술서 읽기",
         estimatedDuration: 90,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_15",
-        categoryId: "default_reading",
+        categoryName: "독서",
         name: "뉴스 읽기",
         description: "뉴스 및 시사 읽기",
         estimatedDuration: 20,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_16",
-        categoryId: "default_reading",
+        categoryName: "독서",
         name: "잡지 읽기",
         description: "잡지 및 기타 읽기",
         estimatedDuration: 30,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 자기계발 카테고리
       {
-        id: "default_item_17",
-        categoryId: "default_self_dev",
+        categoryName: "자기계발",
         name: "언어 학습",
         description: "외국어 학습",
         estimatedDuration: 45,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_18",
-        categoryId: "default_self_dev",
+        categoryName: "자기계발",
         name: "스킬 학습",
         description: "새로운 기술 학습",
         estimatedDuration: 60,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_19",
-        categoryId: "default_self_dev",
+        categoryName: "자기계발",
         name: "인강 시청",
         description: "온라인 강의 시청",
         estimatedDuration: 90,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_20",
-        categoryId: "default_self_dev",
+        categoryName: "자기계발",
         name: "독서",
         description: "자기계발서 읽기",
         estimatedDuration: 45,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 운동 카테고리
       {
-        id: "default_item_21",
-        categoryId: "default_exercise",
+        categoryName: "운동",
         name: "조깅",
         description: "달리기 및 조깅",
         estimatedDuration: 30,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_22",
-        categoryId: "default_exercise",
+        categoryName: "운동",
         name: "헬스장",
         description: "헬스장 운동",
         estimatedDuration: 60,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_23",
-        categoryId: "default_exercise",
+        categoryName: "운동",
         name: "홈트레이닝",
         description: "집에서 하는 운동",
         estimatedDuration: 30,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_24",
-        categoryId: "default_exercise",
+        categoryName: "운동",
         name: "산책",
         description: "걷기 및 산책",
         estimatedDuration: 20,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       // 휴식 카테고리
       {
-        id: "default_item_25",
-        categoryId: "default_rest",
+        categoryName: "휴식",
         name: "낮잠",
         description: "낮잠 및 휴식",
         estimatedDuration: 30,
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_26",
-        categoryId: "default_rest",
+        categoryName: "휴식",
         name: "TV 시청",
         description: "TV 및 영상 시청",
         estimatedDuration: 60,
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_27",
-        categoryId: "default_rest",
+        categoryName: "휴식",
         name: "음악 감상",
         description: "음악 듣기",
         estimatedDuration: 20,
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_item_28",
-        categoryId: "default_rest",
+        categoryName: "휴식",
         name: "게임",
         description: "게임 및 오락",
         estimatedDuration: 45,
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
     ]
   }
 
   // 기본 카테고리 반환 (하드코딩된 데이터)
-  private static getDefaultCategories(): ActivityCategory[] {
+  private static getDefaultCategories(): Omit<
+    ActivityCategory,
+    "id" | "created_at" | "updated_at"
+  >[] {
     return [
       {
-        id: "default_hygiene",
         name: "씻기",
         description: "개인 위생 관리",
         icon: "🛁",
         color: "blue",
         isActive: true,
         order: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_study",
         name: "공부하기",
         description: "학습 및 교육 활동",
         icon: "📚",
         color: "green",
         isActive: true,
         order: 2,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_meals",
         name: "식사하기",
         description: "음식 섭취 및 식사 준비",
         icon: "🍽️",
         color: "orange",
         isActive: true,
         order: 3,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_reading",
         name: "독서",
         description: "책 읽기 및 독서 활동",
         icon: "📖",
         color: "purple",
         isActive: true,
         order: 4,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_self_dev",
         name: "자기계발",
         description: "개인 성장 및 개발 활동",
         icon: "💪",
         color: "red",
         isActive: true,
         order: 5,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_exercise",
         name: "운동",
         description: "신체 활동 및 운동",
         icon: "🏃",
         color: "yellow",
         isActive: true,
         order: 6,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_rest",
         name: "휴식",
         description: "쉬기 및 휴식 활동",
         icon: "😴",
         color: "gray",
         isActive: true,
         order: 7,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       {
-        id: "default_others",
         name: "기타",
         description: "기타 활동",
         icon: "⚡",
         color: "indigo",
         isActive: true,
         order: 8,
-        created_at: new Date(),
-        updated_at: new Date(),
       },
     ]
   }
@@ -724,7 +605,8 @@ export class ActivityService {
       const q = query(
         itemsRef,
         where("categoryId", "==", categoryId),
-        where("userId", "==", userDocId)
+        where("userId", "==", userDocId),
+        where("isActive", "==", true)
       )
 
       const snapshot = await getDocs(q)
@@ -760,12 +642,11 @@ export class ActivityService {
 
       const items = snapshot.docs.map((doc) => {
         const data = doc.data()
-        console.log("📄 Document data:", {
+        console.log("📄 Item:", {
           id: doc.id,
+          name: data.name,
           categoryId: data.categoryId,
           userId: data.userId,
-          name: data.name,
-          isActive: data.isActive,
         })
         return {
           id: doc.id,
@@ -778,7 +659,7 @@ export class ActivityService {
       }) as ActivityItem[]
 
       console.log(
-        "✅ Final items:",
+        "✅ Final items (after filtering):",
         items.length,
         items.map((i) => ({ id: i.id, name: i.name, categoryId: i.categoryId }))
       )
@@ -791,26 +672,23 @@ export class ActivityService {
     }
   }
 
-  // 하드코딩된 ID로 카테고리 이름 찾기
-  private static getCategoryNameById(categoryId: string): string {
-    const defaultCategories = this.getDefaultCategories()
-    const category = defaultCategories.find((cat) => cat.id === categoryId)
-    return category?.name || ""
-  }
-
   static async createActivityItem(
     itemData: Omit<ActivityItem, "id" | "created_at" | "updated_at">
   ): Promise<string> {
     try {
+      console.log("🔍 createActivityItem called with:", itemData)
+
       const itemsRef = collection(db, "userActivityItems")
       const docRef = await addDoc(itemsRef, {
         ...itemData,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       })
+
+      console.log("✅ Activity item created successfully with ID:", docRef.id)
       return docRef.id
     } catch (error) {
-      console.error("Error creating activity item:", error)
+      console.error("❌ Error creating activity item:", error)
       throw new ApiError("활동 아이템 생성 중 오류가 발생했습니다.")
     }
   }
@@ -820,26 +698,44 @@ export class ActivityService {
     updateData: Partial<Omit<ActivityItem, "id" | "created_at">>
   ): Promise<void> {
     try {
+      console.log("🔍 updateActivityItem called with:", { itemId, updateData })
+
       const itemRef = doc(db, "userActivityItems", itemId)
+      console.log("📄 Document reference:", itemRef.path)
+
       await updateDoc(itemRef, {
         ...updateData,
         updated_at: serverTimestamp(),
       })
+
+      console.log("✅ Activity item updated successfully")
     } catch (error) {
-      console.error("Error updating activity item:", error)
+      console.error("❌ Error updating activity item:", error)
+      if (error instanceof ApiError) {
+        throw error
+      }
       throw new ApiError("활동 아이템 수정 중 오류가 발생했습니다.")
     }
   }
 
   static async deleteActivityItem(itemId: string): Promise<void> {
     try {
+      console.log("🔍 deleteActivityItem called with:", itemId)
+
       const itemRef = doc(db, "userActivityItems", itemId)
+      console.log("📄 Document reference:", itemRef.path)
+
       await updateDoc(itemRef, {
         isActive: false,
         updated_at: serverTimestamp(),
       })
+
+      console.log("✅ Activity item deleted successfully")
     } catch (error) {
-      console.error("Error deleting activity item:", error)
+      console.error("❌ Error deleting activity item:", error)
+      if (error instanceof ApiError) {
+        throw error
+      }
       throw new ApiError("활동 아이템 삭제 중 오류가 발생했습니다.")
     }
   }
@@ -1254,6 +1150,60 @@ export class ActivityService {
     } catch (error) {
       console.error("❌ Error deleting all collections:", error)
       throw new ApiError("모든 컬렉션 삭제 중 오류가 발생했습니다.")
+    }
+  }
+
+  // 하드코딩된 ID를 가진 기존 데이터 정리
+  static async cleanupHardcodedData(userId: string): Promise<void> {
+    try {
+      console.log("🧹 Cleaning up hardcoded data for user:", userId)
+
+      // 1. 하드코딩된 ID를 가진 카테고리 삭제
+      const categoriesRef = collection(db, "userCategories")
+      const categoriesQuery = query(
+        categoriesRef,
+        where("userId", "==", userId)
+      )
+      const categoriesSnapshot = await getDocs(categoriesQuery)
+
+      const hardcodedCategories = categoriesSnapshot.docs.filter(
+        (doc) =>
+          doc.id.startsWith("default_") || doc.data().id?.startsWith("default_")
+      )
+
+      if (hardcodedCategories.length > 0) {
+        console.log(
+          `🗑️ Deleting ${hardcodedCategories.length} hardcoded categories`
+        )
+        const categoryDeletePromises = hardcodedCategories.map((doc) =>
+          deleteDoc(doc.ref)
+        )
+        await Promise.all(categoryDeletePromises)
+      }
+
+      // 2. 하드코딩된 ID를 가진 아이템 삭제
+      const itemsRef = collection(db, "userActivityItems")
+      const itemsQuery = query(itemsRef, where("userId", "==", userId))
+      const itemsSnapshot = await getDocs(itemsQuery)
+
+      const hardcodedItems = itemsSnapshot.docs.filter(
+        (doc) =>
+          doc.id.startsWith("default_item_") ||
+          doc.data().id?.startsWith("default_item_")
+      )
+
+      if (hardcodedItems.length > 0) {
+        console.log(`🗑️ Deleting ${hardcodedItems.length} hardcoded items`)
+        const itemDeletePromises = hardcodedItems.map((doc) =>
+          deleteDoc(doc.ref)
+        )
+        await Promise.all(itemDeletePromises)
+      }
+
+      console.log("✅ Hardcoded data cleanup completed")
+    } catch (error) {
+      console.error("❌ Error cleaning up hardcoded data:", error)
+      throw new ApiError("하드코딩된 데이터 정리 중 오류가 발생했습니다.")
     }
   }
 

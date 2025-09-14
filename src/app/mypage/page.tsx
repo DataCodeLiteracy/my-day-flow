@@ -311,7 +311,7 @@ export default function MyPage() {
         </div>
       </div>
 
-      <div className='max-w-md mx-auto px-4 py-6 pb-12'>
+      <div className='max-w-7xl mx-auto px-4 py-6 pb-12'>
         {/* 사용자 프로필 */}
         <div className='text-center mb-8'>
           <div className='w-20 h-20 bg-accent-theme rounded-full flex items-center justify-center mx-auto mb-4'>
@@ -332,7 +332,7 @@ export default function MyPage() {
             <p className='text-theme-tertiary mt-2 text-sm'>통계 로딩 중...</p>
           </div>
         ) : (
-          <div className='space-y-4 mb-6'>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6'>
             {/* 오늘 총합 */}
             <div className='bg-theme-secondary rounded-2xl p-4 shadow-lg'>
               <div className='flex items-center justify-between mb-3'>
@@ -414,7 +414,7 @@ export default function MyPage() {
         )}
 
         {/* 메뉴 */}
-        <div className='space-y-3'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
           <button
             onClick={() => router.push("/analytics")}
             className='w-full bg-theme-secondary hover:bg-theme-tertiary dark:bg-blue-50 dark:hover:bg-blue-100 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-theme-primary/20 dark:border-blue-200'

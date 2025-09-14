@@ -16,11 +16,14 @@ export interface ActivityCategory {
 export interface ActivityItem {
   id: string
   categoryId: string
+  categoryName?: string // 초기화 시에만 사용되는 임시 속성
   name: string
   description?: string
   estimatedDuration: number // 예상 소요 시간 (분)
   isActive: boolean
   order: number
+  userId?: string // 사용자별 아이템을 위한 속성
+  isHardcoded?: boolean // 하드코딩된 기본 데이터인지 표시
   created_at: Date
   updated_at: Date
 }

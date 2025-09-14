@@ -23,7 +23,6 @@ import { useTimer } from "@/contexts/TimerContext"
 import { ActivityCategory, ActivityItem, TimerSession } from "@/types/activity"
 import { ActivityService } from "@/services/activityService"
 import { StatisticsService } from "@/services/statisticsService"
-import { InitializationService } from "@/services/initializationService"
 
 export default function Home() {
   const router = useRouter()
@@ -64,9 +63,7 @@ export default function Home() {
       try {
         setError(null)
 
-        // 사용자 초기화 (기본 카테고리 생성)
-        await InitializationService.initializeUser(userUid)
-
+        // getCategories에서 자동으로 초기화됨
         const [categoriesData, sessionsData] = await Promise.all([
           ActivityService.getCategories(userUid),
           ActivityService.getTodaySessions(userUid),
