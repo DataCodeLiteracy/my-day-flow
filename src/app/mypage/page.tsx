@@ -29,7 +29,6 @@ export default function MyPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isInitializing, setIsInitializing] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isDeletingAll, setIsDeletingAll] = useState(false)
@@ -418,20 +417,20 @@ export default function MyPage() {
         <div className='space-y-3'>
           <button
             onClick={() => router.push("/analytics")}
-            className='w-full bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-blue-200 dark:border-blue-800'
+            className='w-full bg-theme-secondary hover:bg-theme-tertiary dark:bg-blue-50 dark:hover:bg-blue-100 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-theme-primary/20 dark:border-blue-200'
           >
-            <BarChart3 className='h-5 w-5 text-blue-600 dark:text-blue-400' />
-            <span className='text-blue-700 dark:text-blue-300 font-medium'>
+            <BarChart3 className='h-5 w-5 text-theme-primary dark:text-blue-600' />
+            <span className='text-theme-primary dark:text-blue-700 font-medium'>
               분석 페이지
             </span>
           </button>
 
           <button
-            onClick={() => setIsSettingsModalOpen(true)}
-            className='w-full bg-gray-50 dark:bg-gray-800/20 hover:bg-gray-100 dark:hover:bg-gray-800/30 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-gray-200 dark:border-gray-700'
+            onClick={() => router.push("/settings")}
+            className='w-full bg-theme-secondary hover:bg-theme-tertiary dark:bg-gray-50 dark:hover:bg-gray-100 transition-colors rounded-xl p-4 flex items-center gap-3 shadow-lg border border-theme-primary/20 dark:border-gray-200'
           >
-            <Settings className='h-5 w-5 text-gray-600 dark:text-gray-400' />
-            <span className='text-gray-700 dark:text-gray-300 font-medium'>
+            <Settings className='h-5 w-5 text-theme-primary dark:text-gray-600' />
+            <span className='text-theme-primary dark:text-gray-700 font-medium'>
               설정
             </span>
           </button>
@@ -564,36 +563,6 @@ export default function MyPage() {
                 탈퇴하기
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 설정 모달 */}
-      {isSettingsModalOpen && (
-        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
-          <div className='bg-theme-secondary rounded-2xl p-6 max-w-sm w-full shadow-xl'>
-            <div className='flex items-center justify-between mb-4'>
-              <h3 className='text-lg font-semibold text-theme-primary'>설정</h3>
-              <button
-                onClick={() => setIsSettingsModalOpen(false)}
-                className='p-1 text-theme-tertiary hover:text-theme-primary transition-colors'
-              >
-                <X className='h-5 w-5' />
-              </button>
-            </div>
-            <div className='text-center py-8'>
-              <Settings className='h-12 w-12 text-gray-400 mx-auto mb-4' />
-              <p className='text-theme-secondary mb-2'>설정 기능 준비 중</p>
-              <p className='text-sm text-theme-tertiary'>
-                곧 다양한 설정 옵션을 제공할 예정입니다.
-              </p>
-            </div>
-            <button
-              onClick={() => setIsSettingsModalOpen(false)}
-              className='w-full py-2 px-4 bg-accent-theme text-white rounded-lg font-medium transition-colors'
-            >
-              확인
-            </button>
           </div>
         </div>
       )}
