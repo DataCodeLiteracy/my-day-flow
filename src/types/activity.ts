@@ -45,6 +45,7 @@ export interface TimerSession {
   notes?: string
   feedback?: string // 활동에 대한 피드백
   rating?: number // 활동 평점 (1-5)
+  isMidnightEnd?: boolean // 24:00 표시를 위한 플래그
   created_at: Date
   updated_at: Date
 }

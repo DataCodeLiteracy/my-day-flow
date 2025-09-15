@@ -638,12 +638,14 @@ export default function Home() {
                 <div className='min-w-[400px]'>
                   {/* 테이블 헤더 */}
                   <div className='flex gap-2 py-2 px-3 text-xs font-medium text-theme-tertiary border-b border-theme-primary/20 mb-2'>
-                    <div className='w-24 flex-shrink-0 text-center'>시간</div>
-                    <div className='flex-1 min-w-0 text-center'>할 일</div>
-                    <div className='w-16 flex-shrink-0 text-center'>
+                    <div className='w-32 flex-shrink-0 text-center'>시간</div>
+                    <div className='flex-1 min-w-[200px] text-center'>
+                      할 일
+                    </div>
+                    <div className='w-20 flex-shrink-0 text-center'>
                       집중시간
                     </div>
-                    <div className='w-12 flex-shrink-0 text-center'>
+                    <div className='w-16 flex-shrink-0 text-center'>
                       일시정지
                     </div>
                   </div>
@@ -708,16 +710,16 @@ export default function Home() {
                           key={session.id}
                           className='flex gap-2 py-3 px-3 text-sm hover:bg-theme-primary/5 rounded-lg transition-colors items-center'
                         >
-                          <div className='w-24 flex-shrink-0 text-theme-secondary font-mono whitespace-nowrap text-center'>
+                          <div className='w-32 flex-shrink-0 text-theme-secondary font-mono whitespace-nowrap text-center'>
                             {timeRange}
                           </div>
-                          <div className='flex-1 min-w-0 text-theme-primary font-medium truncate text-center'>
+                          <div className='flex-1 min-w-[200px] text-theme-primary font-medium text-center'>
                             {itemName}
                           </div>
-                          <div className='w-16 flex-shrink-0 text-theme-secondary whitespace-nowrap text-center'>
+                          <div className='w-20 flex-shrink-0 text-theme-secondary whitespace-nowrap text-center'>
                             {formatTime(session.activeDuration)}
                           </div>
-                          <div className='w-12 flex-shrink-0 text-theme-tertiary text-center'>
+                          <div className='w-16 flex-shrink-0 text-theme-tertiary text-center'>
                             {session.pauseCount > 0
                               ? `${session.pauseCount}회`
                               : "-"}

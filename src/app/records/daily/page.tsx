@@ -144,8 +144,16 @@ export default function DailyRecordsPage() {
     return date
   }
 
-  // Date를 시간 문자열로 변환
-  const formatTimeString = (date: Date): string => {
+  // Date를 시간 문자열로 변환 (24:00 표시 지원)
+  const formatTimeString = (date: Date, isMidnightEnd?: boolean): string => {
+    const hours = date.getHours()
+    const minutes = date.getMinutes()
+
+    // 00:00이고 isMidnightEnd 플래그가 true인 경우 24:00으로 표시
+    if (hours === 0 && minutes === 0 && isMidnightEnd) {
+      return "24:00"
+    }
+
     return date.toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -708,12 +716,14 @@ export default function DailyRecordsPage() {
                 <div className='min-w-[400px]'>
                   {/* 테이블 헤더 */}
                   <div className='flex gap-2 py-2 px-3 text-xs font-medium text-theme-tertiary border-b border-theme-primary/20 mb-2'>
-                    <div className='w-24 flex-shrink-0 text-center'>시간</div>
-                    <div className='flex-1 min-w-0 text-center'>할 일</div>
+                    <div className='w-32 flex-shrink-0 text-center'>시간</div>
+                    <div className='flex-1 min-w-[200px] text-center'>
+                      할 일
+                    </div>
                     <div className='w-20 flex-shrink-0 text-center'>
                       집중시간
                     </div>
-                    <div className='w-12 flex-shrink-0 text-center'>
+                    <div className='w-16 flex-shrink-0 text-center'>
                       일시정지
                     </div>
                     <div className='w-8 flex-shrink-0 text-center'>수정</div>
@@ -735,20 +745,10 @@ export default function DailyRecordsPage() {
                       const segments = getSessionSegments(session)
 
                       return segments.map((segment, segmentIndex) => {
-                        const startTimeStr =
-                          segment.startTime.toLocaleTimeString("ko-KR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })
-
-                        const endTimeStr = segment.endTime.toLocaleTimeString(
-                          "ko-KR",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          }
+                        const startTimeStr = formatTimeString(segment.startTime)
+                        const endTimeStr = formatTimeString(
+                          segment.endTime,
+                          session.isMidnightEnd
                         )
 
                         const timeRange = `${startTimeStr} ~ ${endTimeStr}`
@@ -758,16 +758,16 @@ export default function DailyRecordsPage() {
                             key={`${session.id}-${segmentIndex}`}
                             className='flex gap-2 py-3 px-3 text-sm hover:bg-theme-primary/5 rounded-lg transition-colors items-center'
                           >
-                            <div className='w-24 flex-shrink-0 text-theme-secondary font-mono whitespace-nowrap text-center'>
+                            <div className='w-32 flex-shrink-0 text-theme-secondary font-mono whitespace-nowrap text-center'>
                               {timeRange}
                             </div>
-                            <div className='flex-1 min-w-0 text-theme-primary font-medium truncate text-center'>
+                            <div className='flex-1 min-w-[200px] text-theme-primary font-medium text-center'>
                               {itemName}
                             </div>
                             <div className='w-20 flex-shrink-0 text-theme-secondary whitespace-nowrap text-center font-mono'>
                               {formatTime(segment.duration)}
                             </div>
-                            <div className='w-12 flex-shrink-0 text-theme-tertiary text-center'>
+                            <div className='w-16 flex-shrink-0 text-theme-tertiary text-center'>
                               {segment.pauseCount > 0
                                 ? `${segment.pauseCount}회`
                                 : "-"}

@@ -857,7 +857,7 @@ export class ActivityService {
     }
   }
 
-  // 특정 날짜의 세션 데이터 가져오기 (상세 기록용)
+  // 특정 날짜의 세션 데이터 가져오기 (상세 기록용) - 날짜 경계 고려
   static async getSessionsByDate(
     userId: string,
     targetDate: Date
@@ -868,17 +868,23 @@ export class ActivityService {
       const endOfDay = new Date(targetDate)
       endOfDay.setHours(23, 59, 59, 999)
 
+      // 날짜 경계를 넘나드는 세션을 포함하기 위해 더 넓은 범위로 조회
+      const extendedStart = new Date(startOfDay)
+      extendedStart.setDate(extendedStart.getDate() - 1)
+      const extendedEnd = new Date(endOfDay)
+      extendedEnd.setDate(extendedEnd.getDate() + 1)
+
       const sessionsRef = collection(db, "timerSessions")
       const q = query(
         sessionsRef,
         where("userId", "==", userId),
-        where("startTime", ">=", startOfDay),
-        where("startTime", "<=", endOfDay),
+        where("startTime", ">=", extendedStart),
+        where("startTime", "<=", extendedEnd),
         orderBy("startTime", "asc")
       )
       const snapshot = await getDocs(q)
 
-      const sessions = snapshot.docs.map((doc) => ({
+      const allSessions = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         startTime: doc.data().startTime?.toDate() || new Date(),
@@ -886,6 +892,43 @@ export class ActivityService {
         created_at: doc.data().created_at?.toDate() || new Date(),
         updated_at: doc.data().updated_at?.toDate() || new Date(),
       })) as TimerSession[]
+
+      // 날짜 경계를 넘나드는 세션을 분할하여 해당 날짜의 세션만 필터링
+      const sessionsForDate: TimerSession[] = []
+
+      for (const session of allSessions) {
+        if (!session.endTime) {
+          // 진행 중인 세션은 시작 날짜에만 표시
+          if (session.startTime.toDateString() === targetDate.toDateString()) {
+            sessionsForDate.push(session)
+          }
+          continue
+        }
+
+        // 세션이 해당 날짜와 겹치는지 확인
+        const sessionStartDate = session.startTime.toDateString()
+        const sessionEndDate = session.endTime.toDateString()
+        const targetDateString = targetDate.toDateString()
+
+        if (
+          sessionStartDate === targetDateString ||
+          sessionEndDate === targetDateString
+        ) {
+          // 날짜 경계를 넘나드는 세션인 경우 분할
+          if (sessionStartDate !== sessionEndDate) {
+            const splitSessions = this.splitSessionForDisplay(
+              session,
+              targetDate
+            )
+            sessionsForDate.push(...splitSessions)
+          } else {
+            // 같은 날짜의 세션
+            sessionsForDate.push(session)
+          }
+        }
+      }
+
+      const sessions = sessionsForDate
 
       // 각 세션에 대해 pauseRecords 가져오기
       const sessionsWithPauseRecords = await Promise.all(
@@ -931,6 +974,81 @@ export class ActivityService {
       }
       return []
     }
+  }
+
+  // UI 표시용으로 세션을 날짜별로 분할하는 메서드
+  static splitSessionForDisplay(
+    session: TimerSession,
+    targetDate: Date
+  ): TimerSession[] {
+    if (!session.endTime) {
+      return [session]
+    }
+
+    const startDate = new Date(session.startTime)
+    const endDate = new Date(session.endTime)
+    const targetDateString = targetDate.toDateString()
+
+    // 같은 날짜면 분할할 필요 없음
+    if (startDate.toDateString() === endDate.toDateString()) {
+      return [session]
+    }
+
+    // 해당 날짜와 겹치는 부분만 계산
+    const dayStart = new Date(targetDate)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(targetDate)
+    dayEnd.setHours(23, 59, 59, 999)
+
+    // 현재 날짜의 시작 시간과 끝 시간 계산
+    const sessionStartTime = new Date(
+      Math.max(startDate.getTime(), dayStart.getTime())
+    )
+
+    // 다음 날로 넘어가는 경우 24:00 (다음날 00:00)으로 표시
+    let sessionEndTime: Date
+    let dayDuration: number
+
+    if (endDate.getTime() > dayEnd.getTime()) {
+      // 다음 날로 넘어가는 경우: 24:00으로 표시
+      sessionEndTime = new Date(targetDate)
+      sessionEndTime.setHours(24, 0, 0, 0) // 24:00으로 표시
+
+      // 실제 시간 계산: 23:59:59.999까지
+      const actualEndTime = new Date(dayEnd)
+      dayDuration = Math.floor(
+        (actualEndTime.getTime() - sessionStartTime.getTime()) / 1000
+      )
+    } else {
+      // 같은 날짜 내에서 끝나는 경우
+      sessionEndTime = endDate
+      dayDuration = Math.floor(
+        (endDate.getTime() - sessionStartTime.getTime()) / 1000
+      )
+    }
+
+    if (dayDuration > 0) {
+      // 이 날짜의 세션 생성 (표시용)
+      const daySession: TimerSession = {
+        ...session,
+        id: `${session.id}_${targetDateString}`, // 날짜별 고유 ID
+        startTime: sessionStartTime,
+        endTime: sessionEndTime,
+        totalDuration: dayDuration,
+        activeDuration: dayDuration,
+        pauseCount: 0, // 일시정지 횟수는 원본 세션에만 기록
+        pauseRecords: [], // 일시정지 기록도 원본 세션에만 기록
+        notes: session.notes
+          ? `${session.notes} (${targetDateString})`
+          : undefined,
+        // 24:00 표시를 위한 플래그 추가
+        isMidnightEnd: endDate.getTime() > dayEnd.getTime(),
+      }
+
+      return [daySession]
+    }
+
+    return []
   }
 
   // 일시정지 기록 관련
