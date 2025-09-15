@@ -23,6 +23,10 @@ import {
   TimerSession,
 } from "@/types/activity"
 import { ApiError } from "@/lib/apiClient"
+import {
+  getSessionsForDate,
+  getSessionsForDateRange,
+} from "@/utils/sessionUtils"
 
 export class StatisticsService {
   // 일일 활동 요약 생성
@@ -32,6 +36,28 @@ export class StatisticsService {
     sessions: TimerSession[]
   ): Promise<void> {
     try {
+      // 날짜 경계를 넘나드는 세션을 분할하여 처리
+      const targetDate = new Date(date)
+      const processedSessions: TimerSession[] = []
+
+      for (const session of sessions) {
+        if (session.status === "completed" && session.endTime) {
+          // 날짜 경계를 넘나드는 세션인지 확인
+          const sessionStartDate = session.startTime.toDateString()
+          const sessionEndDate = session.endTime.toDateString()
+          const targetDateString = targetDate.toDateString()
+
+          if (sessionStartDate !== sessionEndDate) {
+            // 날짜 경계를 넘나드는 세션인 경우 분할
+            const splitSessions = getSessionsForDate([session], targetDate)
+            processedSessions.push(...splitSessions)
+          } else if (sessionStartDate === targetDateString) {
+            // 같은 날짜의 세션
+            processedSessions.push(session)
+          }
+        }
+      }
+
       // 카테고리별로 그룹화
       const categoryMap = new Map<
         string,
@@ -46,7 +72,7 @@ export class StatisticsService {
         }
       >()
 
-      sessions.forEach((session) => {
+      processedSessions.forEach((session) => {
         if (session.status === "completed" && session.endTime) {
           const categoryId = session.categoryId
           const itemId = session.activityItemId

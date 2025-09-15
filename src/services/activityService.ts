@@ -20,6 +20,7 @@ import {
   PauseRecord,
 } from "@/types/activity"
 import { ApiError } from "@/lib/apiClient"
+import { getSessionsForDate } from "@/utils/sessionUtils"
 
 export class ActivityService {
   // 초기화 Promise 캐싱
