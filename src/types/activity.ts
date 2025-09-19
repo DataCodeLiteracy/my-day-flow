@@ -46,6 +46,8 @@ export interface TimerSession {
   feedback?: string // 활동에 대한 피드백
   rating?: number // 활동 평점 (1-5)
   isMidnightEnd?: boolean // 24:00 표시를 위한 플래그
+  originalId?: string // 분할된 세션의 원본 ID
+  splitDate?: string // 분할된 날짜 (YYYY-MM-DD)
   created_at: Date
   updated_at: Date
 }
@@ -146,4 +148,9 @@ export interface TimerState {
   currentSession: TimerSession | null
   pauseRecords: PauseRecord[]
   activityName?: string
+  alertInterval?: NodeJS.Timeout
+  lastAlertTime?: Date
+  showFocusCheckModal?: boolean
+  focusCheckStartTime?: Date
+  focusCheckTimeout?: NodeJS.Timeout
 }

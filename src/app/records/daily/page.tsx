@@ -64,6 +64,45 @@ export default function DailyRecordsPage() {
     null
   )
 
+  // 분할된 세션의 원본 ID 추출 함수
+  const getOriginalSessionId = (
+    session: TimerSession
+  ): { id: string; isSplit: boolean } => {
+    console.log(
+      "🔍 getOriginalSessionId input:",
+      session.id,
+      session.originalId
+    )
+
+    if (session.originalId) {
+      console.log("✅ Using originalId:", session.originalId)
+      return { id: session.originalId, isSplit: true }
+    }
+
+    // ID에 날짜 패턴이 포함되어 있으면 원본 ID 추출
+    if (session.id.includes("_") && session.id.match(/_\d{4}-\d{2}-\d{2}$/)) {
+      const originalId = session.id.split("_")[0]
+      console.log("✅ Extracted originalId from pattern:", originalId)
+      return { id: originalId, isSplit: true }
+    }
+
+    // 추가 패턴 매칭: "ID_Thu Sep 18 2025" 형태도 처리
+    if (
+      session.id.includes("_") &&
+      session.id.match(/_[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{4}$/)
+    ) {
+      const originalId = session.id.split("_")[0]
+      console.log(
+        "✅ Extracted originalId from date string pattern:",
+        originalId
+      )
+      return { id: originalId, isSplit: true }
+    }
+
+    console.log("✅ Using original id:", session.id)
+    return { id: session.id, isSplit: false }
+  }
+
   // 시간 input refs
   const editStartTimeRef = useRef<HTMLInputElement>(null)
   const editEndTimeRef = useRef<HTMLInputElement>(null)
@@ -135,11 +174,11 @@ export default function DailyRecordsPage() {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
-  // 시간 문자열을 Date로 변환
-  const parseTimeString = (timeStr: string): Date => {
-    const today = new Date()
+  // 시간 문자열을 Date로 변환 (선택된 날짜 기준)
+  const parseTimeString = (timeStr: string, baseDate?: Date): Date => {
+    const targetDate = baseDate || new Date()
     const [hours, minutes] = timeStr.split(":").map(Number)
-    const date = new Date(today)
+    const date = new Date(targetDate)
     date.setHours(hours, minutes, 0, 0)
     return date
   }
@@ -161,16 +200,17 @@ export default function DailyRecordsPage() {
     })
   }
 
-  // 시작시간과 종료시간으로부터 집중시간(분) 계산
+  // 시작시간과 종료시간으로부터 집중시간(분) 계산 (선택된 날짜 기준)
   const calculateActiveDuration = (
     startTime: string,
-    endTime: string
+    endTime: string,
+    baseDate?: Date
   ): number => {
     if (!startTime || !endTime) return 0
 
     try {
-      const start = parseTimeString(startTime)
-      const end = parseTimeString(endTime)
+      const start = parseTimeString(startTime, baseDate)
+      const end = parseTimeString(endTime, baseDate)
 
       if (end <= start) return 0
 
@@ -225,9 +265,17 @@ export default function DailyRecordsPage() {
 
     // 시작시간과 종료시간이 모두 있으면 자동으로 집중시간 계산
     if (field === "startTime" && newForm.endTime) {
-      newForm.activeDuration = calculateActiveDuration(value, newForm.endTime)
+      newForm.activeDuration = calculateActiveDuration(
+        value,
+        newForm.endTime,
+        selectedDate
+      )
     } else if (field === "endTime" && newForm.startTime) {
-      newForm.activeDuration = calculateActiveDuration(newForm.startTime, value)
+      newForm.activeDuration = calculateActiveDuration(
+        newForm.startTime,
+        value,
+        selectedDate
+      )
     }
 
     setEditForm(newForm)
@@ -248,20 +296,70 @@ export default function DailyRecordsPage() {
       setIsActionLoading(true)
       setError(null)
 
-      const startTime = parseTimeString(editForm.startTime)
+      // 선택된 날짜를 기준으로 시간 설정
+      const targetDate = new Date(selectedDate)
+      const startTime = parseTimeString(editForm.startTime, targetDate)
       const endTime = editForm.endTime
-        ? parseTimeString(editForm.endTime)
+        ? parseTimeString(editForm.endTime, targetDate)
         : null
       const activeDuration = editForm.activeDuration * 60 // 초 단위로 변환
 
-      await ActivityService.updateTimerSession(editingSession.id, {
-        startTime,
-        endTime: endTime || undefined,
-        activeDuration,
-        totalDuration: endTime
-          ? Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
-          : 0,
-      })
+      console.log("📅 Selected date for editing:", targetDate.toDateString())
+      console.log("📅 Original selectedDate state:", selectedDate)
+      console.log("🕐 Start time:", startTime)
+      console.log("🕐 End time:", endTime)
+
+      // 분할된 세션의 원본 ID 추출
+      const { id: sessionId, isSplit: isSplitSession } =
+        getOriginalSessionId(editingSession)
+
+      console.log("🔍 Editing session:", editingSession)
+      console.log("🔍 Session ID to use:", sessionId)
+      console.log("🔍 Is split session:", isSplitSession)
+
+      // 간단한 해결책: 추출된 ID로 직접 시도
+      try {
+        console.log("🎯 Attempting to update with extracted ID:", sessionId)
+        await ActivityService.updateTimerSession(sessionId, {
+          startTime,
+          endTime: endTime || undefined,
+          activeDuration,
+          totalDuration: endTime
+            ? Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
+            : 0,
+        })
+        console.log("✅ Update successful with extracted ID")
+      } catch (directError) {
+        console.log("❌ Direct update failed, trying alternative approach")
+
+        // 대안: 원본 ID의 첫 번째 부분으로 시도
+        const alternativeId = editingSession.id.split("_")[0]
+        console.log("🔄 Trying alternative ID:", alternativeId)
+
+        try {
+          await ActivityService.updateTimerSession(alternativeId, {
+            startTime,
+            endTime: endTime || undefined,
+            activeDuration,
+            totalDuration: endTime
+              ? Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
+              : 0,
+          })
+          console.log("✅ Update successful with alternative ID")
+        } catch (alternativeError) {
+          console.error("❌ Both update attempts failed")
+          console.error("Direct error:", directError)
+          console.error("Alternative error:", alternativeError)
+          throw new Error(
+            `세션을 찾을 수 없습니다. 원본 ID: ${editingSession.id}, 추출된 ID: ${sessionId}, 대안 ID: ${alternativeId}`
+          )
+        }
+      }
+
+      // 분할된 세션인 경우 알림
+      if (isSplitSession) {
+        setError("날짜 경계를 넘나드는 세션은 원본 세션 전체가 수정됩니다.")
+      }
 
       // 수정 횟수 증가
       const newEditCount = editCount + 1
@@ -275,8 +373,59 @@ export default function DailyRecordsPage() {
       // 데이터 새로고침
       const sessionsData = await ActivityService.getTodaySessions(userUid!)
       setTodaySessions(sessionsData)
-      // 선택된 날짜의 세션도 새로고침
-      await loadSessionsForDate(selectedDate)
+
+      // 분할된 세션인 경우 관련된 모든 날짜의 데이터 새로고침
+      if (isSplitSession) {
+        // 원본 세션의 시작일과 종료일 확인
+        const originalStartDate = new Date(editingSession.startTime)
+        const originalEndDate = editingSession.endTime
+          ? new Date(editingSession.endTime)
+          : new Date()
+
+        // 수정된 시간으로 새로운 날짜 범위 계산
+        const newStartDate = startTime
+        const newEndDate = endTime || new Date()
+
+        // 기존 날짜 범위와 새로운 날짜 범위의 모든 날짜 새로고침
+        const allDates = new Set()
+
+        // 기존 날짜들 추가
+        const originalStart = new Date(originalStartDate)
+        originalStart.setHours(0, 0, 0, 0)
+        const originalEnd = new Date(originalEndDate)
+        originalEnd.setHours(23, 59, 59, 999)
+
+        for (
+          let d = new Date(originalStart);
+          d <= originalEnd;
+          d.setDate(d.getDate() + 1)
+        ) {
+          allDates.add(d.toDateString())
+        }
+
+        // 새로운 날짜들 추가
+        const newStart = new Date(newStartDate)
+        newStart.setHours(0, 0, 0, 0)
+        const newEnd = new Date(newEndDate)
+        newEnd.setHours(23, 59, 59, 999)
+
+        for (
+          let d = new Date(newStart);
+          d <= newEnd;
+          d.setDate(d.getDate() + 1)
+        ) {
+          allDates.add(d.toDateString())
+        }
+
+        // 모든 관련 날짜의 세션 데이터 새로고침
+        for (const dateString of allDates) {
+          const date = new Date(dateString as string)
+          await loadSessionsForDate(date)
+        }
+      } else {
+        // 일반 세션인 경우 현재 선택된 날짜만 새로고침
+        await loadSessionsForDate(selectedDate)
+      }
     } catch (error) {
       console.error("Error updating session:", error)
       setError("세션 수정 중 오류가 발생했습니다.")
@@ -305,7 +454,43 @@ export default function DailyRecordsPage() {
       setIsActionLoading(true)
       setError(null)
 
-      await ActivityService.deleteTimerSession(sessionToDelete.id)
+      // 분할된 세션의 원본 ID 추출
+      const { id: sessionId, isSplit: isSplitSession } =
+        getOriginalSessionId(sessionToDelete)
+
+      console.log("🔍 Deleting session:", sessionToDelete)
+      console.log("🔍 Session ID to use:", sessionId)
+      console.log("🔍 Is split session:", isSplitSession)
+
+      // 간단한 해결책: 추출된 ID로 직접 시도
+      try {
+        console.log("🎯 Attempting to delete with extracted ID:", sessionId)
+        await ActivityService.deleteTimerSession(sessionId)
+        console.log("✅ Delete successful with extracted ID")
+      } catch (directError) {
+        console.log("❌ Direct delete failed, trying alternative approach")
+
+        // 대안: 원본 ID의 첫 번째 부분으로 시도
+        const alternativeId = sessionToDelete.id.split("_")[0]
+        console.log("🔄 Trying alternative ID for deletion:", alternativeId)
+
+        try {
+          await ActivityService.deleteTimerSession(alternativeId)
+          console.log("✅ Delete successful with alternative ID")
+        } catch (alternativeError) {
+          console.error("❌ Both delete attempts failed")
+          console.error("Direct error:", directError)
+          console.error("Alternative error:", alternativeError)
+          throw new Error(
+            `세션을 찾을 수 없습니다. 원본 ID: ${sessionToDelete.id}, 추출된 ID: ${sessionId}, 대안 ID: ${alternativeId}`
+          )
+        }
+      }
+
+      // 분할된 세션인 경우 알림
+      if (isSplitSession) {
+        setError("날짜 경계를 넘나드는 세션은 원본 세션 전체가 삭제됩니다.")
+      }
 
       setIsDeleteModalOpen(false)
       setSessionToDelete(null)
@@ -313,8 +498,40 @@ export default function DailyRecordsPage() {
       // 데이터 새로고침
       const sessionsData = await ActivityService.getTodaySessions(userUid!)
       setTodaySessions(sessionsData)
-      // 선택된 날짜의 세션도 새로고침
-      await loadSessionsForDate(selectedDate)
+
+      // 분할된 세션인 경우 관련된 모든 날짜의 데이터 새로고침
+      if (isSplitSession) {
+        // 원본 세션의 시작일과 종료일 확인
+        const originalStartDate = new Date(sessionToDelete.startTime)
+        const originalEndDate = sessionToDelete.endTime
+          ? new Date(sessionToDelete.endTime)
+          : new Date()
+
+        // 기존 날짜 범위의 모든 날짜 새로고침
+        const allDates = new Set()
+
+        const originalStart = new Date(originalStartDate)
+        originalStart.setHours(0, 0, 0, 0)
+        const originalEnd = new Date(originalEndDate)
+        originalEnd.setHours(23, 59, 59, 999)
+
+        for (
+          let d = new Date(originalStart);
+          d <= originalEnd;
+          d.setDate(d.getDate() + 1)
+        ) {
+          allDates.add(d.toDateString())
+        }
+
+        // 모든 관련 날짜의 세션 데이터 새로고침
+        for (const dateString of allDates) {
+          const date = new Date(dateString as string)
+          await loadSessionsForDate(date)
+        }
+      } else {
+        // 일반 세션인 경우 현재 선택된 날짜만 새로고침
+        await loadSessionsForDate(selectedDate)
+      }
     } catch (error) {
       console.error("Error deleting session:", error)
       setError("세션 삭제 중 오류가 발생했습니다.")
@@ -330,10 +547,11 @@ export default function DailyRecordsPage() {
       return
     }
 
-    // 선택된 날짜가 오늘이 아닌 경우 오늘로 이동
-    if (selectedDate.toDateString() !== new Date().toDateString()) {
-      setSelectedDate(new Date())
-    }
+    console.log(
+      "📅 Adding session for selected date:",
+      selectedDate.toDateString()
+    )
+    console.log("📅 Current selectedDate state:", selectedDate)
 
     setNewSessionForm({
       categoryId: "",
@@ -355,9 +573,17 @@ export default function DailyRecordsPage() {
 
     // 시작시간과 종료시간이 모두 있으면 자동으로 집중시간 계산
     if (field === "startTime" && newForm.endTime) {
-      newForm.activeDuration = calculateActiveDuration(value, newForm.endTime)
+      newForm.activeDuration = calculateActiveDuration(
+        value,
+        newForm.endTime,
+        selectedDate
+      )
     } else if (field === "endTime" && newForm.startTime) {
-      newForm.activeDuration = calculateActiveDuration(newForm.startTime, value)
+      newForm.activeDuration = calculateActiveDuration(
+        newForm.startTime,
+        value,
+        selectedDate
+      )
     }
 
     setNewSessionForm(newForm)
@@ -391,11 +617,18 @@ export default function DailyRecordsPage() {
       setIsActionLoading(true)
       setError(null)
 
-      const startTime = parseTimeString(newSessionForm.startTime)
+      // 선택된 날짜를 기준으로 시간 설정
+      const targetDate = new Date(selectedDate)
+      const startTime = parseTimeString(newSessionForm.startTime, targetDate)
       const endTime = newSessionForm.endTime
-        ? parseTimeString(newSessionForm.endTime)
+        ? parseTimeString(newSessionForm.endTime, targetDate)
         : null
       const activeDuration = newSessionForm.activeDuration * 60
+
+      console.log("📅 Selected date for adding:", targetDate.toDateString())
+      console.log("📅 Original selectedDate state:", selectedDate)
+      console.log("🕐 Start time:", startTime)
+      console.log("🕐 End time:", endTime)
 
       await ActivityService.createTimerSession({
         userId: userUid!,
@@ -763,6 +996,14 @@ export default function DailyRecordsPage() {
                             </div>
                             <div className='flex-1 min-w-[200px] text-theme-primary font-medium text-center'>
                               {itemName}
+                              {getOriginalSessionId(session).isSplit && (
+                                <span
+                                  className='ml-2 text-xs text-orange-500'
+                                  title='날짜 경계를 넘나드는 세션'
+                                >
+                                  📅
+                                </span>
+                              )}
                             </div>
                             <div className='w-20 flex-shrink-0 text-theme-secondary whitespace-nowrap text-center font-mono'>
                               {formatTime(segment.duration)}
@@ -927,7 +1168,13 @@ export default function DailyRecordsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-theme-secondary mb-1'>
+                    <label
+                      className={`block text-sm font-medium mb-1 ${
+                        !newSessionForm.categoryId
+                          ? "text-gray-400 dark:text-gray-500"
+                          : "text-theme-secondary"
+                      }`}
+                    >
                       활동
                     </label>
                     <select
@@ -939,18 +1186,30 @@ export default function DailyRecordsPage() {
                         })
                       }
                       disabled={!newSessionForm.categoryId}
-                      className='w-full px-3 py-2 border border-theme-primary/20 rounded-lg bg-theme-background text-theme-primary focus:outline-none focus:border-theme-primary disabled:bg-gray-100 dark:disabled:bg-gray-800'
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors ${
+                        !newSessionForm.categoryId
+                          ? "border-gray-300 bg-transparent text-gray-400 cursor-not-allowed dark:border-gray-600 dark:bg-transparent dark:text-gray-500"
+                          : "border-theme-primary/20 bg-theme-background text-theme-primary focus:border-theme-primary"
+                      }`}
                       style={{
                         colorScheme: "dark",
                       }}
                     >
-                      <option value=''>활동 선택</option>
-                      {getItemsByCategory(newSessionForm.categoryId).map(
-                        (item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        )
+                      {!newSessionForm.categoryId ? (
+                        <option value='' disabled>
+                          먼저 카테고리를 선택하세요
+                        </option>
+                      ) : (
+                        <>
+                          <option value=''>활동 선택</option>
+                          {getItemsByCategory(newSessionForm.categoryId).map(
+                            (item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            )
+                          )}
+                        </>
                       )}
                     </select>
                   </div>

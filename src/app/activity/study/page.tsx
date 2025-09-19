@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Clock, Play, Plus } from "lucide-react"
+import { ArrowLeft, Clock, Play, Plus, CheckCircle, Pause } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useTimer } from "@/contexts/TimerContext"
 import { ActivityItem, TimerSession } from "@/types/activity"
@@ -10,7 +10,23 @@ import { ActivityItem, TimerSession } from "@/types/activity"
 export default function StudyPage() {
   const router = useRouter()
   const { userUid, isLoggedIn, loading } = useAuth()
-  const { timerState, startTimer, pauseTimer, resumeTimer, stopTimer } = useTimer()
+  const {
+    timerState,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopTimer,
+    handleFocusCheck,
+    showFocusCheckModal,
+    hideFocusCheckModal,
+  } = useTimer()
+
+  // 알림 소리 중지 함수
+  const stopAlertSound = () => {
+    if (timerState.alertInterval) {
+      clearInterval(timerState.alertInterval)
+    }
+  }
 
   const [todaySessions, setTodaySessions] = useState<TimerSession[]>([])
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false)
@@ -27,43 +43,43 @@ export default function StudyPage() {
       name: "수학 공부",
       description: "수학 문제 풀이 및 학습",
       estimatedDuration: 60,
-      icon: "🔢"
+      icon: "🔢",
     },
     {
       id: "english_study",
       name: "영어 공부",
       description: "영어 학습 및 연습",
       estimatedDuration: 45,
-      icon: "🇺🇸"
+      icon: "🇺🇸",
     },
     {
       id: "coding_study",
       name: "코딩 공부",
       description: "프로그래밍 학습",
       estimatedDuration: 90,
-      icon: "💻"
+      icon: "💻",
     },
     {
       id: "exam_prep",
       name: "시험 준비",
       description: "시험 대비 학습",
       estimatedDuration: 120,
-      icon: "📝"
+      icon: "📝",
     },
     {
       id: "reading_study",
       name: "교과서 읽기",
       description: "교과서 및 학습 자료 읽기",
       estimatedDuration: 30,
-      icon: "📖"
+      icon: "📖",
     },
     {
       id: "online_lecture",
       name: "온라인 강의",
       description: "온라인 강의 시청",
       estimatedDuration: 60,
-      icon: "🎥"
-    }
+      icon: "🎥",
+    },
   ]
 
   useEffect(() => {
@@ -237,7 +253,7 @@ export default function StudyPage() {
             원하는 공부 관련 활동이 없다면 직접 추가해보세요
           </p>
           <button
-            onClick={() => router.push('/settings')}
+            onClick={() => router.push("/settings")}
             className='flex items-center gap-2 text-accent-theme hover:text-accent-theme-secondary transition-colors'
           >
             <Plus className='h-4 w-4' />
@@ -257,41 +273,90 @@ export default function StudyPage() {
                   {formatTime(elapsedTime)}
                 </div>
 
-                <div className='flex gap-3 justify-center'>
-                  {timerState.isPaused ? (
+                <div className='space-y-3'>
+                  <div className='flex gap-3 justify-center'>
+                    {timerState.isPaused ? (
+                      <button
+                        onClick={handleResumeTimer}
+                        className='flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors'
+                      >
+                        <Play className='h-4 w-4' />
+                        재개
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePauseTimer}
+                        className='flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors'
+                      >
+                        <Clock className='h-4 w-4' />
+                        일시정지
+                      </button>
+                    )}
+
                     <button
-                      onClick={handleResumeTimer}
+                      onClick={handleCompleteTimer}
                       className='flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors'
                     >
-                      <Play className='h-4 w-4' />
-                      재개
+                      ✓ 완료
                     </button>
-                  ) : (
+
                     <button
-                      onClick={handlePauseTimer}
-                      className='flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors'
+                      onClick={handleCancelTimer}
+                      className='flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors'
                     >
-                      <Clock className='h-4 w-4' />
-                      일시정지
+                      ✕ 취소
                     </button>
-                  )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
+        {/* 집중 상태 확인 모달 */}
+        {timerState.showFocusCheckModal && (
+          <div className='fixed inset-0 bg-theme-backdrop flex items-center justify-center z-60'>
+            <div className='bg-theme-secondary rounded-lg p-8 shadow-lg max-w-md w-full mx-4'>
+              <div className='text-center'>
+                <h3 className='text-xl font-semibold text-theme-primary mb-4'>
+                  집중 상태 확인
+                </h3>
+                <p className='text-theme-secondary mb-6'>
+                  지금 집중하고 계신가요?
+                </p>
+
+                <div className='flex gap-3 justify-center mb-4'>
                   <button
-                    onClick={handleCompleteTimer}
-                    className='flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors'
+                    onClick={() => handleFocusCheck(true)}
+                    className='flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors text-lg font-medium'
                   >
-                    ✓
-                    완료
+                    <CheckCircle className='h-5 w-5' />
+                    집중 중
                   </button>
-
                   <button
-                    onClick={handleCancelTimer}
-                    className='flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors'
+                    onClick={() => handleFocusCheck(false)}
+                    className='flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-colors text-lg font-medium'
                   >
-                    ✕
-                    취소
+                    <Pause className='h-5 w-5' />
+                    집중 안함
                   </button>
                 </div>
+
+                {/* 알림 소리 끄기 버튼 */}
+                {timerState.alertInterval && (
+                  <div className='mt-4'>
+                    <button
+                      onClick={stopAlertSound}
+                      className='w-full flex items-center justify-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors text-sm'
+                    >
+                      🔇 알림 소리 끄기
+                    </button>
+                  </div>
+                )}
+
+                <p className='text-xs text-theme-tertiary mt-4'>
+                  3분 내에 응답하지 않으면 자동으로 완료됩니다
+                </p>
               </div>
             </div>
           </div>

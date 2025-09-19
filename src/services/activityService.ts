@@ -1135,6 +1135,36 @@ export class ActivityService {
     }
   }
 
+  // 사용자의 모든 세션 가져오기 (수정/삭제용) - 인덱스 없이
+  static async getAllUserSessions(userId: string): Promise<TimerSession[]> {
+    try {
+      const sessionsRef = collection(db, "timerSessions")
+      const q = query(
+        sessionsRef,
+        where("userId", "==", userId)
+        // orderBy 제거하여 인덱스 문제 회피
+      )
+      const snapshot = await getDocs(q)
+
+      const sessions = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        startTime: doc.data().startTime?.toDate() || new Date(),
+        endTime: doc.data().endTime?.toDate() || undefined,
+        created_at: doc.data().created_at?.toDate() || new Date(),
+        updated_at: doc.data().updated_at?.toDate() || new Date(),
+      })) as TimerSession[]
+
+      // 클라이언트 사이드에서 정렬
+      sessions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+
+      return sessions
+    } catch (error) {
+      console.error("Error getting all user sessions:", error)
+      throw new ApiError("사용자 세션 조회 중 오류가 발생했습니다.")
+    }
+  }
+
   // 관리자용: 특정 사용자 아이템 초기화 (기존 데이터 삭제 후 재생성)
   static async forceInitializeItems(userId: string): Promise<void> {
     try {

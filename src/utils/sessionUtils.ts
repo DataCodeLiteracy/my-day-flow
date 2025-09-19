@@ -44,7 +44,9 @@ export function splitSessionByDate(session: TimerSession): TimerSession[] {
       // 이 날짜의 세션 생성
       const daySession: TimerSession = {
         ...session,
-        id: `${session.id}_${currentDate.toISOString().split("T")[0]}`, // 날짜별 고유 ID
+        id: session.id, // 원본 ID 유지 (삭제/수정을 위해)
+        originalId: session.id, // 원본 ID를 별도로 저장
+        splitDate: currentDate.toISOString().split("T")[0], // 분할된 날짜 정보
         startTime: sessionStartTime,
         endTime: sessionEndTime,
         totalDuration: dayDuration,

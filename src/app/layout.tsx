@@ -11,6 +11,15 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "나의 하루 리포트",
   description: "나만의 하루 흐름을 기록하고 관리해보세요",
+  manifest: "/manifest.json",
+  themeColor: "#3b82f6",
+  viewport:
+    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "DayFlow",
+  },
 }
 
 export default function RootLayout({

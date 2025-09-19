@@ -25,8 +25,23 @@ export default function ActivityCategoryPage() {
   const params = useParams()
   const router = useRouter()
   const { userUid, userDocId, isLoggedIn, loading } = useAuth()
-  const { timerState, startTimer, pauseTimer, resumeTimer, stopTimer } =
-    useTimer()
+  const {
+    timerState,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopTimer,
+    handleFocusCheck,
+    showFocusCheckModal,
+    hideFocusCheckModal,
+  } = useTimer()
+
+  // 알림 소리 중지 함수
+  const stopAlertSound = () => {
+    if (timerState.alertInterval) {
+      clearInterval(timerState.alertInterval)
+    }
+  }
 
   const categoryId = params.categoryId as string
 
@@ -895,6 +910,55 @@ export default function ActivityCategoryPage() {
                     저장
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 집중 상태 확인 모달 */}
+        {timerState.showFocusCheckModal && (
+          <div className='fixed inset-0 bg-theme-backdrop flex items-center justify-center z-60'>
+            <div className='bg-theme-secondary rounded-lg p-8 shadow-lg max-w-md w-full mx-4'>
+              <div className='text-center'>
+                <h3 className='text-xl font-semibold text-theme-primary mb-4'>
+                  집중 상태 확인
+                </h3>
+                <p className='text-theme-secondary mb-6'>
+                  지금 집중하고 계신가요?
+                </p>
+
+                <div className='flex gap-3 justify-center mb-4'>
+                  <button
+                    onClick={() => handleFocusCheck(true)}
+                    className='flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors text-lg font-medium'
+                  >
+                    <CheckCircle className='h-5 w-5' />
+                    집중 중
+                  </button>
+                  <button
+                    onClick={() => handleFocusCheck(false)}
+                    className='flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-colors text-lg font-medium'
+                  >
+                    <Pause className='h-5 w-5' />
+                    집중 안함
+                  </button>
+                </div>
+
+                {/* 알림 소리 끄기 버튼 */}
+                {timerState.alertInterval && (
+                  <div className='mt-4'>
+                    <button
+                      onClick={stopAlertSound}
+                      className='w-full flex items-center justify-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors text-sm'
+                    >
+                      🔇 알림 소리 끄기
+                    </button>
+                  </div>
+                )}
+
+                <p className='text-xs text-theme-tertiary mt-4'>
+                  3분 내에 응답하지 않으면 자동으로 완료됩니다
+                </p>
               </div>
             </div>
           </div>

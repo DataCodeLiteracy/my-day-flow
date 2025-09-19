@@ -1,0 +1,17 @@
+{
+  "name": "My Day Flow",
+  "short_name": "DayFlow",
+  "description": "하루를 기록하고 관리하는 앱",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ],
+  "permissions": ["notifications", "background-sync"]
+}
