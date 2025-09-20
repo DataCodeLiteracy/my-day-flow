@@ -29,8 +29,6 @@ interface TimerContextType {
   cancelTimer: () => void
   resetTimer: () => void
   handleFocusCheck: (isFocused: boolean) => void
-  showFocusCheckModal: () => void
-  hideFocusCheckModal: () => void
 }
 
 const TimerContext = createContext<TimerContextType>({
@@ -49,8 +47,6 @@ const TimerContext = createContext<TimerContextType>({
   cancelTimer: () => {},
   resetTimer: () => {},
   handleFocusCheck: () => {},
-  showFocusCheckModal: () => {},
-  hideFocusCheckModal: () => {},
 })
 
 export const useTimer = () => {
@@ -133,77 +129,64 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
     }))
   }
 
-  // 주기적 집중 상태 확인 알림 (30분마다)
+  // 주기적 집중 상태 확인 알림 (30분마다) - 완전히 새로운 간단한 버전
   const startFocusAlert = () => {
+    console.log("🔔 startFocusAlert 호출됨 - 간단한 버전")
+
+    // 기존 인터벌 정리
     if (timerState.alertInterval) {
       clearInterval(timerState.alertInterval)
     }
 
+    // 1초마다 체크
     const interval = setInterval(() => {
       const currentState = timerStateRef.current
+
+      // 타이머가 실행 중이 아니면 중단
       if (
-        currentState.isRunning &&
-        !currentState.isPaused &&
-        currentState.startTime
+        !currentState.isRunning ||
+        currentState.isPaused ||
+        !currentState.startTime
       ) {
-        // 타이머 시작 시간부터 경과된 시간 계산 (초 단위)
-        const elapsedSeconds = Math.floor(
-          (new Date().getTime() - currentState.startTime.getTime()) / 1000
-        )
+        return
+      }
 
-        // 30분 = 1800초
-        const thirtyMinutes = 30 * 60
+      // 경과 시간 계산
+      const elapsedSeconds = Math.floor(
+        (new Date().getTime() - currentState.startTime.getTime()) / 1000
+      )
 
-        // 30분 단위로 나누어떨어지는지 확인 (30분, 1시간, 1시간 30분, 2시간...)
-        // 마지막 알림 시간과 비교하여 중복 방지
-        const lastAlertTime = currentState.lastAlertTime
-        const shouldAlert =
-          elapsedSeconds > 0 &&
-          elapsedSeconds % thirtyMinutes === 0 &&
-          (!lastAlertTime ||
-            Math.floor(
-              (new Date().getTime() - lastAlertTime.getTime()) / 1000
-            ) >= thirtyMinutes)
+      // 30분마다 알림 (30분 = 1800초)
+      if (elapsedSeconds > 0 && elapsedSeconds % 1800 === 0) {
+        console.log(`🔔 ${elapsedSeconds / 60}분 경과 - 모달 표시!`)
 
-        if (shouldAlert) {
-          console.log(`🔔 ${elapsedSeconds / 60}분 경과 알림 트리거!`)
+        // 모달 표시
+        setTimerState((prev) => ({
+          ...prev,
+          showFocusCheckModal: true,
+        }))
 
-          // 집중 상태 확인 모달 표시
-          showFocusCheckModal()
+        // 알림 소리
+        startRepeatingAlert()
 
-          // 브라우저 알림 요청
-          if (Notification.permission === "granted") {
-            new Notification("집중 상태 확인", {
-              body: "지금도 집중하고 계신가요? 앱으로 돌아가서 집중 상태를 확인해주세요.",
-              icon: "/favicon.ico",
-              requireInteraction: true,
-            })
-
-            // 반복 알림 소리 시작
-            startRepeatingAlert()
-          } else if (Notification.permission !== "denied") {
-            Notification.requestPermission().then((permission) => {
-              if (permission === "granted") {
-                new Notification("집중 상태 확인", {
-                  body: "지금도 집중하고 계신가요? 앱으로 돌아가서 집중 상태를 확인해주세요.",
-                  icon: "/favicon.ico",
-                  requireInteraction: true,
-                })
-
-                // 반복 알림 소리 시작
-                startRepeatingAlert()
-              }
-            })
-          }
-
-          // 알림 시간 업데이트
-          setTimerState((prev) => ({
-            ...prev,
-            lastAlertTime: new Date(),
-          }))
+        // 브라우저 알림
+        if (Notification.permission === "granted") {
+          new Notification("집중 상태 확인", {
+            body: "30분이 지났습니다. 지금도 집중하고 계신가요?",
+            icon: "/favicon.ico",
+          })
+        } else if (Notification.permission !== "denied") {
+          Notification.requestPermission().then((permission) => {
+            if (permission === "granted") {
+              new Notification("집중 상태 확인", {
+                body: "30분이 지났습니다. 지금도 집중하고 계신가요?",
+                icon: "/favicon.ico",
+              })
+            }
+          })
         }
       }
-    }, 1000) // 1초마다 체크
+    }, 1000)
 
     setTimerState((prev) => ({
       ...prev,
@@ -222,69 +205,27 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
     }
   }
 
-  // 집중 상태 확인 모달 표시
-  const showFocusCheckModal = () => {
-    const startTime = new Date()
-    setTimerState((prev) => ({
-      ...prev,
-      showFocusCheckModal: true,
-      focusCheckStartTime: startTime,
-    }))
-
-    // 3분 무응답 시 자동 완료
-    const timeout = setTimeout(() => {
-      console.log("⏰ 3분 경과, 자동 완료")
-      const currentState = timerStateRef.current
-      if (currentState.isRunning && !currentState.isPaused) {
-        console.log("🚫 3분 무응답으로 인한 자동 완료 실행")
-        stopTimer(true) // 완료로 처리
-      }
-    }, 3 * 60 * 1000) // 3분
-
-    setTimerState((prev) => ({
-      ...prev,
-      focusCheckTimeout: timeout,
-    }))
-  }
-
-  // 집중 상태 확인 모달 숨기기
-  const hideFocusCheckModal = () => {
-    setTimerState((prev) => {
-      // 3분 타이머 정리
-      if (prev.focusCheckTimeout) {
-        clearTimeout(prev.focusCheckTimeout)
-      }
-
-      return {
-        ...prev,
-        showFocusCheckModal: false,
-        focusCheckStartTime: undefined,
-        focusCheckTimeout: undefined,
-      }
-    })
-  }
-
   // 집중 상태 확인 핸들러
   const handleFocusCheck = (isFocused: boolean) => {
+    console.log(`🎯 집중 상태 선택: ${isFocused}`)
+
     // 알림 소리 중지
     stopAlertSound()
 
-    // 집중 상태 확인 모달 숨기기
-    hideFocusCheckModal()
-
-    const currentState = timerStateRef.current
+    // 모달 닫기
+    setTimerState((prev) => ({
+      ...prev,
+      showFocusCheckModal: false,
+    }))
 
     if (!isFocused) {
-      // 집중하지 않고 있다면 타이머 완료
-      console.log("🚫 User not focused, completing timer")
-      stopTimer(true) // 완료로 처리
-    } else if (isFocused && currentState.isPaused) {
-      // 집중하고 있다면 타이머 재개
-      console.log("✅ User focused, resuming timer")
-      resumeTimer()
-    } else if (isFocused && currentState.isRunning && !currentState.isPaused) {
-      // 집중 중이면 계속 진행
-      console.log("✅ User focused, continuing timer")
+      // 집중하지 않음 → 타이머 완료
+      console.log("🚫 집중하지 않음 - 타이머 완료")
+      stopTimer(true)
+    } else {
+      // 집중함 → 계속 진행
+      console.log("✅ 집중함 - 타이머 계속")
+      // 아무것도 하지 않음 (타이머는 계속 실행)
     }
   }
 
@@ -328,9 +269,13 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
         },
         pauseRecords: [],
         activityName,
+        alertInterval: undefined,
+        lastAlertTime: undefined,
+        showFocusCheckModal: false,
       })
 
       // 집중 상태 확인 알림 시작
+      console.log("🚀 타이머 시작, 집중 상태 확인 알림 시작")
       startFocusAlert()
     } catch (error) {
       console.error("Error starting timer:", error)
@@ -418,6 +363,7 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
     completed: boolean,
     notes?: string
   ): Promise<TimerSession | null> => {
+    console.log("🛑 stopTimer 호출됨:", { completed, notes })
     if (!timerState.isRunning || !timerState.currentSession) return null
 
     try {
@@ -467,6 +413,7 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
   }
 
   const resetTimer = () => {
+    console.log("🔄 resetTimer 호출됨")
     // 알림 소리 중지
     stopAlertSound()
 
@@ -477,6 +424,9 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
       pausedTime: 0,
       currentSession: null,
       pauseRecords: [],
+      alertInterval: undefined,
+      lastAlertTime: undefined,
+      showFocusCheckModal: false,
     })
   }
 
@@ -491,8 +441,6 @@ export const TimerProvider = ({ children }: TimerProviderProps) => {
         cancelTimer,
         resetTimer,
         handleFocusCheck,
-        showFocusCheckModal,
-        hideFocusCheckModal,
       }}
     >
       {children}

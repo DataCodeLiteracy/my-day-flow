@@ -79,7 +79,18 @@ export default function MyPage() {
   const loadUserStats = async () => {
     try {
       setIsLoading(true)
-      const sessions = await ActivityService.getTodaySessions(user!.uid)
+      // 모든 사용자 세션을 가져옴 (오늘만이 아닌 전체)
+      const sessions = await ActivityService.getAllUserSessions(user!.uid)
+      console.log("📊 전체 세션 수:", sessions.length)
+      console.log(
+        "📊 세션 목록:",
+        sessions.map((s) => ({
+          id: s.id,
+          startTime: s.startTime,
+          activeDuration: s.activeDuration,
+          status: s.status,
+        }))
+      )
 
       const now = new Date()
 
@@ -92,6 +103,11 @@ export default function MyPage() {
       const todaySessions = sessions.filter((session) => {
         const sessionDate = new Date(session.startTime)
         return sessionDate >= todayStart && sessionDate <= todayEnd
+      })
+      console.log("📅 오늘 날짜 범위:", {
+        start: todayStart.toISOString(),
+        end: todayEnd.toISOString(),
+        sessions: todaySessions.length,
       })
       const todayTotal = {
         sessions: todaySessions.length,
@@ -106,6 +122,7 @@ export default function MyPage() {
           weekday: "long",
         }),
       }
+      console.log("📅 오늘 통계:", todayTotal)
 
       // 이번 주 총합 (월요일부터 일요일까지)
       const currentWeekStart = new Date(now)
@@ -122,6 +139,11 @@ export default function MyPage() {
         const sessionDate = new Date(session.startTime)
         return sessionDate >= currentWeekStart && sessionDate <= currentWeekEnd
       })
+      console.log("📅 이번주 날짜 범위:", {
+        start: currentWeekStart.toISOString(),
+        end: currentWeekEnd.toISOString(),
+        sessions: thisWeekSessions.length,
+      })
       const thisWeekTotal = {
         sessions: thisWeekSessions.length,
         time: thisWeekSessions.reduce(
@@ -136,6 +158,7 @@ export default function MyPage() {
           day: "numeric",
         })}`,
       }
+      console.log("📅 이번주 통계:", thisWeekTotal)
 
       // 이번 달 총합
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -155,6 +178,11 @@ export default function MyPage() {
           sessionDate >= currentMonthStart && sessionDate <= currentMonthEnd
         )
       })
+      console.log("📅 이번달 날짜 범위:", {
+        start: currentMonthStart.toISOString(),
+        end: currentMonthEnd.toISOString(),
+        sessions: thisMonthSessions.length,
+      })
       const thisMonthTotal = {
         sessions: thisMonthSessions.length,
         time: thisMonthSessions.reduce(
@@ -166,6 +194,7 @@ export default function MyPage() {
           month: "long",
         }),
       }
+      console.log("📅 이번달 통계:", thisMonthTotal)
 
       setUserStats({
         todayTotal,
